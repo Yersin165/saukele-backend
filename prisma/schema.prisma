@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  COUPLE
+  GUEST
+  VENDOR
+  COURIER
+  ADMIN
+}
+
+enum WeddingType {
+  CITY
+  VILLAGE
+}
+
+enum KinshipType {
+  ATA_ANA
+  AGA_INI
+  ZHIEN
+  QUDA
+  OTHER
+}
+
+enum GiftTier {
+  TIER_1
+  TIER_2
+  TIER_3
+  TIER_4
+  TIER_5
+}
+
+enum GiftStatus {
+  AVAILABLE
+  PARTIALLY_FUNDED
+  FUNDED
+  PURCHASED
+  DELIVERED
+}
+
+enum GiftPrivacy {
+  PUBLIC
+  FAMILY_ONLY
+}
+
+enum ContributionStatus {
+  PENDING
+  CONFIRMED
+  REFUNDED
+}
+
+enum Currency {
+  KZT
+  USD
+}
+
+enum TransactionType {
+  CONTRIBUTION
+  REFUND
+  PAYOUT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum VendorStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+enum OrderStatus {
+  PLACED
+  CONFIRMED
+  READY_FOR_PICKUP
+  PICKED_UP
+  DELIVERED
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  IN_TRANSIT
+  GEOFENCE_TRIGGERED
+  DELIVERED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  weddingProfile  WeddingProfile?
+  vendorProfile   Vendor?
+  contributions   PoolContribution[]
+  auditLogs       AuditLog[]
+  deliveries      Delivery[]
+  familyMembers   FamilyMember[]
+
+  @@index([email])
+}
+
+model WeddingProfile {
+  id           String      @id @default(uuid())
+  coupleId     String      @unique
+  brideName    String
+  groomName    String
+  weddingDate  DateTime
+  location     String
+  weddingType  WeddingType @default(CITY)
+  inviteCode   String      @unique @default(uuid())
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+
+  couple        User          @relation(fields: [coupleId], references: [id])
+  giftItems     GiftItem[]
+  familyMembers FamilyMember[]
+
+  @@index([inviteCode])
+}
+
+model FamilyMember {
+  id               String      @id @default(uuid())
+  weddingProfileId String
+  guestId          String
+  kinshipType      KinshipType
+  giftTier         GiftTier
+  parentId         String?
+  createdAt        DateTime    @default(now())
+
+  weddingProfile   WeddingProfile @relation(fields: [weddingProfileId], references: [id])
+  guest            User           @relation(fields: [guestId], references: [id])
+  parent           FamilyMember?  @relation("FamilyTree", fields: [parentId], references: [id])
+  children         FamilyMember[] @relation("FamilyTree")
+
+  @@unique([weddingProfileId, guestId])
+  @@index([weddingProfileId])
+  @@index([parentId])
+}
+
+model GiftItem {
+  id               String      @id @default(uuid())
+  weddingProfileId String
+  vendorId         String?
+  name             String
+  description      String?
+  price            Float
+  isPoolGift       Boolean     @default(false)
+  targetAmount     Float?
+  currentAmount    Float       @default(0)
+  status           GiftStatus  @default(AVAILABLE)
+  privacy          GiftPrivacy @default(PUBLIC)
+  isFragile        Boolean     @default(false)
+  deadlineAt       DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  weddingProfile   WeddingProfile     @relation(fields: [weddingProfileId], references: [id])
+  vendor           Vendor?            @relation(fields: [vendorId], references: [id])
+  contributions    PoolContribution[]
+  order            Order?
+  delivery         Delivery?
+
+  @@index([weddingProfileId])
+  @@index([status])
+}
+
+model PoolContribution {
+  id             String             @id @default(uuid())
+  giftItemId     String
+  guestId        String
+  amountOriginal Float
+  currency       Currency
+  amountKzt      Float
+  exchangeRate   Float
+  lockedAt       DateTime           @default(now())
+  status         ContributionStatus @default(PENDING)
+  createdAt      DateTime           @default(now())
+
+  giftItem       GiftItem           @relation(fields: [giftItemId], references: [id])
+  guest          User               @relation(fields: [guestId], references: [id])
+  transaction    Transaction?
+
+  @@index([giftItemId])
+  @@index([guestId])
+}
+
+model Transaction {
+  id               String            @id @default(uuid())
+  contributionId   String            @unique
+  type             TransactionType
+  status           TransactionStatus @default(PENDING)
+  amountKzt        Float
+  paymentReference String?
+  idempotencyKey   String            @unique
+  createdAt        DateTime          @default(now())
+
+  contribution     PoolContribution  @relation(fields: [contributionId], references: [id])
+
+  @@index([idempotencyKey])
+  @@index([status])
+}
+
+model Vendor {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  shopName    String
+  description String?
+  phone       String
+  status      VendorStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id])
+  giftItems   GiftItem[]
+  orders      Order[]
+
+  @@index([status])
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  giftItemId  String      @unique
+  vendorId    String
+  totalAmount Float
+  status      OrderStatus @default(PLACED)
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  giftItem    GiftItem    @relation(fields: [giftItemId], references: [id])
+  vendor      Vendor      @relation(fields: [vendorId], references: [id])
+  delivery    Delivery?
+
+  @@index([vendorId])
+  @@index([status])
+}
+
+model Delivery {
+  id              String         @id @default(uuid())
+  orderId         String         @unique
+  giftItemId      String         @unique
+  courierId       String
+  status          DeliveryStatus @default(ASSIGNED)
+  isFragile       Boolean        @default(false)
+  destinationLat  Float
+  destinationLng  Float
+  autoCompletedAt DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  order           Order          @relation(fields: [orderId], references: [id])
+  giftItem        GiftItem       @relation(fields: [giftItemId], references: [id])
+  courier         User           @relation(fields: [courierId], references: [id])
+
+  @@index([courierId])
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  tableName String
+  recordId  String
+  oldValue  Json?
+  newValue  Json?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tableName, recordId])
+}
