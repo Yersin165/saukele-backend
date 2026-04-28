@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { swaggerUi, swaggerDocument } = require('./config/swagger');
 
 const authRoutes = require('./routes/auth.routes');
 const weddingRoutes = require('./routes/wedding.routes');
@@ -10,6 +9,7 @@ const contributionRoutes = require('./routes/contribution.routes');
 const familyMemberRoutes = require('./routes/familyMember.routes');
 const vendorRoutes = require('./routes/vendor.routes');
 const adminRoutes = require('./routes/admin.routes');
+const { swaggerUi, swaggerDocument } = require('./config/swagger');
 
 const app = express();
 
@@ -34,9 +34,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
 module.exports = app;

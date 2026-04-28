@@ -9,7 +9,7 @@ const create = async (guestId, data) => {
   if (!gift) throw { status: 404, message: 'Gift not found' };
   if (!gift.isPoolGift) throw { status: 400, message: 'This gift does not accept contributions' };
 
-  const exchangeRate = EXCHANGE_RATES[currency];
+  const exchangeRate = EXCHANGE_RATES[currency] || 1;
   const amountKzt = amountOriginal * exchangeRate;
 
   const remaining = gift.targetAmount - gift.currentAmount;
@@ -20,44 +20,40 @@ const create = async (guestId, data) => {
     if (existing) throw { status: 409, message: 'Duplicate idempotency key' };
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const contribution = await tx.poolContribution.create({
-      data: {
-        giftItemId,
-        guestId,
-        amountOriginal,
-        currency,
-        amountKzt,
-        exchangeRate,
-        lockedAt: new Date(),
-        status: 'PENDING'
-      }
-    });
-
-    if (idempotencyKey) {
-      await tx.transaction.create({
-        data: {
-          contributionId: contribution.id,
-          type: 'CONTRIBUTION',
-          status: 'PENDING',
-          amountKzt,
-          idempotencyKey
-        }
-      });
+  const contribution = await prisma.poolContribution.create({
+    data: {
+      giftItemId,
+      guestId,
+      amountOriginal,
+      currency,
+      amountKzt,
+      exchangeRate,
+      lockedAt: new Date(),
+      status: 'PENDING'
     }
-
-    const newAmount = gift.currentAmount + amountKzt;
-    const newStatus = newAmount >= gift.targetAmount ? 'FUNDED' : 'PARTIALLY_FUNDED';
-
-    await tx.giftItem.update({
-      where: { id: giftItemId },
-      data: { currentAmount: newAmount, status: newStatus }
-    });
-
-    return contribution;
   });
 
-  return result;
+  if (idempotencyKey) {
+    await prisma.transaction.create({
+      data: {
+        contributionId: contribution.id,
+        type: 'CONTRIBUTION',
+        status: 'PENDING',
+        amountKzt,
+        idempotencyKey
+      }
+    });
+  }
+
+  const newAmount = gift.currentAmount + amountKzt;
+  const newStatus = newAmount >= gift.targetAmount ? 'FUNDED' : 'PARTIALLY_FUNDED';
+
+  await prisma.giftItem.update({
+    where: { id: giftItemId },
+    data: { currentAmount: newAmount, status: newStatus }
+  });
+
+  return contribution;
 };
 
 const list = async ({ giftItemId, status, cursor, limit = 20 }) => {
