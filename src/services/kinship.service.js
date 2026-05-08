@@ -73,4 +73,8 @@ const remove = async (id) => {
   await prisma.familyMember.delete({ where: { id } });
 };
 
-module.exports = { create, list, getTree, update, remove };
+const getTierForKinship = (weddingType, kinshipType) => {
+  return TIER_MAP[weddingType]?.[kinshipType] || 'TIER_5';
+};
+
+module.exports = { create, list, getTree, update, remove, getTierForKinship };

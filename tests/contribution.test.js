@@ -14,17 +14,20 @@ beforeEach(async () => {
   await prisma.weddingProfile.deleteMany();
   await prisma.vendor.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 
   const coupleRes = await request(app)
     .post('/api/auth/register')
     .send({ email: 'couple@example.com', password: 'StrongPass123!', role: 'COUPLE' });
   coupleToken = coupleRes.body.accessToken;
+  await prisma.user.update({ where: { email: 'couple@example.com' }, data: { isVerified: true } });
 
   const guestRes = await request(app)
     .post('/api/auth/register')
     .send({ email: 'guest@example.com', password: 'StrongPass123!', role: 'GUEST' });
   guestToken = guestRes.body.accessToken;
+  await prisma.user.update({ where: { email: 'guest@example.com' }, data: { isVerified: true } });
 
   const weddingRes = await request(app)
     .post('/api/weddings')

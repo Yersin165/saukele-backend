@@ -12,6 +12,7 @@ beforeEach(async () => {
   await prisma.weddingProfile.deleteMany();
   await prisma.vendor.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 });
 
@@ -44,6 +45,7 @@ describe('Auth', () => {
     await request(app)
       .post('/api/auth/register')
       .send({ email: 'test@example.com', password: 'StrongPass123!', role: 'COUPLE' });
+    await prisma.user.update({ where: { email: 'test@example.com' }, data: { isVerified: true } });
     const res = await request(app)
       .post('/api/auth/login')
       .send({ email: 'test@example.com', password: 'StrongPass123!' });
