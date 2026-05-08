@@ -8,5 +8,7 @@ router.patch('/vendors/:id/approve', authenticate, authorize('ADMIN'), adminCont
 router.patch('/vendors/:id/suspend', authenticate, authorize('ADMIN'), adminController.suspendVendor);
 router.get('/users', authenticate, authorize('ADMIN'), adminController.listUsers);
 router.patch('/users/:id/ban', authenticate, authorize('ADMIN'), adminController.banUser);
+router.patch('/users/:id/unban', authenticate, authorize('ADMIN'), adminController.unbanUser);
+router.get('/queues', authenticate, authorize('ADMIN'), adminController.getQueueStats);
 
 module.exports = router;

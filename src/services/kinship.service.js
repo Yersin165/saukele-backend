@@ -42,22 +42,23 @@ const list = async ({ weddingProfileId, cursor, limit = 20 }) => {
 };
 
 const getTree = async (weddingProfileId) => {
-  const members = await prisma.$queryRaw`
-    WITH RECURSIVE family_tree AS (
-      SELECT id, "guestId", "kinshipType", "giftTier", "parentId", 0 AS depth
-      FROM "FamilyMember"
-      WHERE "weddingProfileId" = ${weddingProfileId}
-      AND "parentId" IS NULL
-      
-      UNION ALL
-      
-      SELECT f.id, f."guestId", f."kinshipType", f."giftTier", f."parentId", ft.depth + 1
-      FROM "FamilyMember" f
-      INNER JOIN family_tree ft ON f."parentId" = ft.id
-    )
-    SELECT * FROM family_tree ORDER BY depth, "kinshipType"
-  `;
-  return members;
+  const allMembers = await prisma.familyMember.findMany({
+    where: { weddingProfileId },
+    include: { guest: { select: { email: true } } },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  const buildNode = (member, depth) => ({
+    ...member,
+    depth,
+    children: allMembers
+      .filter(m => m.parentId === member.id)
+      .map(child => buildNode(child, depth + 1))
+  });
+
+  return allMembers
+    .filter(m => m.parentId === null)
+    .map(root => buildNode(root, 0));
 };
 
 const update = async (id, data) => {

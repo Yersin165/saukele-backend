@@ -100,6 +100,12 @@ model User {
   role         Role
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  isVerified                 Boolean   @default(false)
+  verificationToken          String?   @unique
+  verificationTokenExpiresAt DateTime?
+  resetToken                 String?   @unique
+  resetTokenExpiresAt        DateTime?
+  isBanned                   Boolean   @default(false)
 
   weddingProfile  WeddingProfile?
   vendorProfile   Vendor?
@@ -107,6 +113,7 @@ model User {
   auditLogs       AuditLog[]
   deliveries      Delivery[]
   familyMembers   FamilyMember[]
+  refreshTokens   RefreshToken[]
 
   @@index([email])
 }
@@ -282,4 +289,18 @@ model AuditLog {
 
   @@index([userId])
   @@index([tableName, recordId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([token])
 }
