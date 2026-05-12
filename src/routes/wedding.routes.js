@@ -8,6 +8,7 @@ router.post('/', authenticate, authorize('COUPLE'), weddingController.create);
 router.get('/:id', authenticate, weddingController.getById);
 router.patch('/:id', authenticate, authorize('COUPLE'), weddingController.update);
 router.delete('/:id', authenticate, authorize('COUPLE'), weddingController.deactivate);
+router.patch('/:id/deactivate', authenticate, authorize('COUPLE'), weddingController.deactivate);
 router.get('/invite/:inviteCode', weddingController.getByInviteCode);
 
 module.exports = router;

@@ -27,10 +27,11 @@ const update = async (req, res) => {
   }
 };
 
+// AFTER
 const deactivate = async (req, res) => {
   try {
-    await weddingService.deactivate(req.params.id);
-    res.status(200).json({ message: 'Wedding profile deactivated' });
+    const wedding = await weddingService.deactivate(req.params.id);
+    res.status(200).json(wedding);
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
   }
