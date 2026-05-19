@@ -16,6 +16,8 @@ const contributionRoutes = require('./routes/contribution.routes');
 const familyMemberRoutes = require('./routes/familyMember.routes');
 const vendorRoutes = require('./routes/vendor.routes');
 const adminRoutes = require('./routes/admin.routes');
+const orderRoutes = require('./routes/order.routes');
+const deliveryRoutes = require('./routes/delivery.routes');
 const { swaggerUi, swaggerDocument } = require('./config/swagger');
 
 const app = express();
@@ -41,6 +43,8 @@ app.use('/api/contributions', contributionRoutes);
 app.use('/api/family-members', familyMemberRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/deliveries', deliveryRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

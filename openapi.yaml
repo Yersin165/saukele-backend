@@ -1245,6 +1245,23 @@ paths:
           description: Validation error
         '500':
           description: Internal server error
+    
+    delete:
+      summary: Delete an order
+      tags: [Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order deleted
+        '404':
+          description: Order not found
 
   /deliveries:
     post:
@@ -1469,6 +1486,23 @@ paths:
           description: Validation error
         '500':
           description: Internal server error
+
+    delete:
+      summary: Delete a delivery
+      tags: [Deliveries]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Delivery deleted
+        '404':
+          description: Delivery not found
 
   /admin/vendors/{id}/approve:
     patch:
