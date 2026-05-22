@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Tree — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="/">💍 Saukele</a>
+    <div class="nav-links" id="nav-links"></div>
+  </nav>
+  <div class="container">
+    <div class="page-title">Family Tree</div>
+    <div class="page-subtitle">Manage kinship tiers for gift obligations</div>
+    <div class="alert alert-error" id="err"></div>
+    <div class="alert alert-success" id="msg"></div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Add Family Member</div>
+        <div class="form-group"><label>Guest User ID (UUID)</label><input id="f-guestId" placeholder="Guest user UUID"></div>
+        <div class="form-group"><label>Kinship Type</label>
+          <select id="f-kinship">
+            <option value="ATA_ANA">Ата-Ана (Parents)</option>
+            <option value="AGA_INI">Ағa-Іні (Siblings)</option>
+            <option value="ZHIEN">Жиен (Nephews/Nieces)</option>
+            <option value="QUDA">Құда (In-laws)</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Parent Member ID (optional)</label><input id="f-parentId" placeholder="Leave empty for root"></div>
+        <button class="btn btn-primary" onclick="addMember()">Add Member</button>
+        <div class="mt-2" style="background:#ede9fe;padding:1rem;border-radius:8px;font-size:0.85rem">
+          <strong>Auto Tier Assignment:</strong><br>
+          City: Ата-Ана→T1, Ағa/Іні→T2, Жиен→T3, Құда→T2, Other→T3<br>
+          Village: Ата-Ана→T1, Ағa/Іні→T2, Жиен→T3, Құда→T2, Other→T4
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Family Tree View</div>
+        <div id="tree-view"><div class="empty-state"><div class="icon">🌳</div><p>No family members yet</p></div></div>
+      </div>
+    </div>
+    <div class="card mt-2">
+      <div class="card-title">Family Members List</div>
+      <div id="members-list"><div class="empty-state"><div class="icon">👥</div><p>Loading...</p></div></div>
+    </div>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    const user = requireRole(['COUPLE']);
+    let weddingId = null;
+    const kinshipLabel = { ATA_ANA:'Ата-Ана', AGA_INI:'Ағa-Іні', ZHIEN:'Жиен', QUDA:'Құда', OTHER:'Other' };
+    const tierColor = { TIER_1:'badge-red', TIER_2:'badge-yellow', TIER_3:'badge-blue', TIER_4:'badge-green', TIER_5:'badge-gray' };
+
+    if (user) { buildNav('nav-links', 'family'); init(); }
+
+    function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.className = 'alert alert-error show'; }
+    function showMsg(m) { const e = document.getElementById('msg'); e.textContent = m; e.className = 'alert alert-success show'; }
+
+    async function init() {
+      const res = await authFetch('/api/weddings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.data?.length > 0) { weddingId = data.data[0].id; loadMembers(); loadTree(); }
+        else showErr('Create a wedding profile first.');
+      }
+    }
+
+    async function loadMembers() {
+      const res = await authFetch(`/api/family-members?weddingProfileId=${weddingId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const members = data.data || [];
+      if (!members.length) { document.getElementById('members-list').innerHTML = '<div class="empty-state"><div class="icon">👥</div><p>No family members yet</p></div>'; return; }
+      document.getElementById('members-list').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Guest</th><th>Kinship</th><th>Gift Tier</th><th>Actions</th></tr></thead>
+          <tbody>${members.map(m => `
+            <tr>
+              <td>${m.guest?.email || m.guestId}</td>
+              <td>${kinshipLabel[m.kinshipType] || m.kinshipType}</td>
+              <td><span class="badge ${tierColor[m.giftTier]||'badge-gray'}">${m.giftTier}</span></td>
+              <td><button class="btn btn-danger btn-sm" onclick="removeMember('${m.id}')">Remove</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function loadTree() {
+      const res = await authFetch(`/api/family-members/tree/${weddingId}`);
+      if (!res.ok) return;
+      const tree = await res.json();
+      if (!tree.length) return;
+      document.getElementById('tree-view').innerHTML = renderTree(tree);
+    }
+
+    function renderTree(nodes, depth = 0) {
+      return nodes.map(n => `
+        <div class="tree-node" style="margin-left:${depth*20}px">
+          <strong>${n.guest?.email || n.guestId}</strong>
+          <span class="badge ${tierColor[n.giftTier]||'badge-gray'}">${n.giftTier}</span>
+          <span class="text-muted"> — ${kinshipLabel[n.kinshipType]}</span>
+        </div>
+        ${n.children?.length ? renderTree(n.children, depth+1) : ''}`).join('');
+    }
+
+    async function addMember() {
+      const guestId = document.getElementById('f-guestId').value.trim();
+      const kinshipType = document.getElementById('f-kinship').value;
+      const parentId = document.getElementById('f-parentId').value.trim() || undefined;
+      if (!guestId) { showErr('Guest ID is required'); return; }
+      const res = await authFetch('/api/family-members', { method: 'POST', body: JSON.stringify({ weddingProfileId: weddingId, guestId, kinshipType, ...(parentId && { parentId }) }) });
+      const data = await res.json();
+      if (!res.ok) { showErr(data.error?.message || 'Failed'); return; }
+      showMsg('Member added! Tier auto-assigned.');
+      document.getElementById('f-guestId').value = '';
+      document.getElementById('f-parentId').value = '';
+      loadMembers(); loadTree();
+    }
+
+    async function removeMember(id) {
+      if (!confirm('Remove this family member?')) return;
+      const res = await authFetch(`/api/family-members/${id}`, { method: 'DELETE' });
+      if (!res.ok) { showErr('Failed to remove'); return; }
+      showMsg('Removed'); loadMembers(); loadTree();
+    }
+  </script>
+</body>
+</html>

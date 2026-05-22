@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="/">💍 Saukele</a>
+    <div class="nav-links" id="nav-links"></div>
+  </nav>
+  <div class="container">
+    <div class="page-title">⚙️ Admin Dashboard</div>
+    <div class="page-subtitle">Platform management</div>
+    <div class="alert alert-error" id="err"></div>
+    <div class="alert alert-success" id="msg"></div>
+
+    <div class="grid-3 mb-2">
+      <div class="card stat-card"><div class="stat-value" id="stat-users">—</div><div class="stat-label">Total Users</div></div>
+      <div class="card stat-card"><div class="stat-value" id="stat-vendors">—</div><div class="stat-label">Vendors</div></div>
+      <div class="card stat-card"><div class="stat-value" id="stat-weddings">—</div><div class="stat-label">Registries</div></div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between mb-2">
+        <div class="card-title" style="margin:0">Users</div>
+        <select id="role-filter" onchange="loadUsers()" style="padding:0.4rem 0.8rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.85rem">
+          <option value="">All Roles</option>
+          <option value="COUPLE">Couple</option>
+          <option value="GUEST">Guest</option>
+          <option value="VENDOR">Vendor</option>
+          <option value="COURIER">Courier</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+      </div>
+      <div id="users-list"><div class="empty-state"><div class="icon">👥</div><p>Loading...</p></div></div>
+    </div>
+
+    <div class="card mt-2">
+      <div class="card-title">Vendor Applications</div>
+      <div id="vendors-list"><div class="empty-state"><div class="icon">🏪</div><p>Loading...</p></div></div>
+    </div>
+
+    <div class="card mt-2">
+      <div class="card-title">Audit Log</div>
+      <div id="audit-list"><div class="empty-state"><div class="icon">📋</div><p>Loading...</p></div></div>
+    </div>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    const user = requireRole(['ADMIN']);
+    if (user) { buildNav('nav-links', 'admin'); loadUsers(); loadVendors(); loadAuditLog(); }
+
+    function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.className = 'alert alert-error show'; }
+    function showMsg(m) { const e = document.getElementById('msg'); e.textContent = m; e.className = 'alert alert-success show'; }
+
+    async function loadUsers() {
+      const role = document.getElementById('role-filter').value;
+      let url = '/api/admin/users?limit=20';
+      if (role) url += `&role=${role}`;
+      const res = await authFetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+      const users = data.data || [];
+      document.getElementById('stat-users').textContent = users.length;
+      if (!users.length) { document.getElementById('users-list').innerHTML = '<div class="empty-state"><p>No users found</p></div>'; return; }
+      document.getElementById('users-list').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Email</th><th>Role</th><th>Verified</th><th>Banned</th><th>Actions</th></tr></thead>
+          <tbody>${users.map(u=>`
+            <tr>
+              <td>${u.email}</td>
+              <td><span class="badge badge-purple">${u.role}</span></td>
+              <td>${u.isVerified?'<span class="badge badge-green">Yes</span>':'<span class="badge badge-red">No</span>'}</td>
+              <td>${u.isBanned?'<span class="badge badge-red">Banned</span>':'<span class="badge badge-gray">No</span>'}</td>
+              <td>${u.isBanned
+                ? `<button class="btn btn-success btn-sm" onclick="toggleBan('${u.id}',false)">Unban</button>`
+                : `<button class="btn btn-danger btn-sm" onclick="toggleBan('${u.id}',true)">Ban</button>`}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function loadVendors() {
+      const res = await authFetch('/api/admin/vendors?limit=20');
+      if (!res.ok) return;
+      const data = await res.json();
+      const vendors = data.data || [];
+      document.getElementById('stat-vendors').textContent = vendors.length;
+      if (!vendors.length) { document.getElementById('vendors-list').innerHTML = '<div class="empty-state"><p>No vendors</p></div>'; return; }
+      document.getElementById('vendors-list').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Shop</th><th>Phone</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>${vendors.map(v=>`
+            <tr>
+              <td><strong>${v.shopName}</strong><div class="text-muted">${v.description||''}</div></td>
+              <td>${v.phone}</td>
+              <td><span class="badge ${v.status==='APPROVED'?'badge-green':v.status==='SUSPENDED'?'badge-red':'badge-yellow'}">${v.status}</span></td>
+              <td style="display:flex;gap:0.4rem">
+                ${v.status!=='APPROVED'?`<button class="btn btn-success btn-sm" onclick="setVendorStatus('${v.id}','APPROVED')">Approve</button>`:''}
+                ${v.status!=='SUSPENDED'?`<button class="btn btn-danger btn-sm" onclick="setVendorStatus('${v.id}','SUSPENDED')">Suspend</button>`:''}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function loadAuditLog() {
+      const res = await authFetch('/api/admin/audit-logs?limit=15');
+      if (!res.ok) return;
+      const data = await res.json();
+      const logs = data.data || [];
+      if (!logs.length) return;
+      document.getElementById('audit-list').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Action</th><th>Table</th><th>Record</th><th>Time</th></tr></thead>
+          <tbody>${logs.map(l=>`
+            <tr>
+              <td><span class="badge badge-blue">${l.action}</span></td>
+              <td>${l.tableName}</td>
+              <td style="font-family:monospace;font-size:0.75rem">${l.recordId.slice(0,12)}...</td>
+              <td class="text-muted">${new Date(l.createdAt).toLocaleString()}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function toggleBan(userId, ban) {
+      if (!confirm(`${ban?'Ban':'Unban'} this user?`)) return;
+      const res = await authFetch(`/api/admin/users/${userId}/${ban?'ban':'unban'}`, { method: 'PATCH' });
+      if (!res.ok) { showErr('Action failed'); return; }
+      showMsg(`User ${ban?'banned':'unbanned'}`); loadUsers();
+    }
+
+    async function setVendorStatus(vendorId, status) {
+      const res = await authFetch(`/api/admin/vendors/${vendorId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      if (!res.ok) { showErr('Failed'); return; }
+      showMsg(`Vendor ${status.toLowerCase()}`); loadVendors();
+    }
+  </script>
+</body>
+</html>

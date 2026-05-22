@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="/">💍 Saukele</a>
+    <div class="nav-links" id="nav-links"></div>
+  </nav>
+  <div class="container">
+    <div class="page-title">Dashboard</div>
+    <div class="page-subtitle" id="welcome-msg"></div>
+    <div class="grid-3 mb-2">
+      <div class="card stat-card"><div class="stat-value" id="stat-weddings">—</div><div class="stat-label">Wedding Profiles</div></div>
+      <div class="card stat-card"><div class="stat-value" id="stat-gifts">—</div><div class="stat-label">Gift Items</div></div>
+      <div class="card stat-card"><div class="stat-value" id="stat-funded">—</div><div class="stat-label">Fully Funded</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Quick Actions</div>
+        <div style="display:flex;flex-direction:column;gap:0.75rem">
+          <a href="/pages/registry.html" class="btn btn-primary">💍 Manage Wedding Registry</a>
+          <a href="/pages/family.html" class="btn btn-outline">👨‍👩‍👧‍👦 Manage Family Tree</a>
+          <a href="/pages/orders.html" class="btn btn-outline">📦 View Orders</a>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">My Wedding Profile</div>
+        <div id="wedding-summary">
+          <div class="empty-state"><div class="icon">💍</div><p>No wedding profile yet</p><a href="/pages/registry.html" class="btn btn-primary btn-sm mt-1">Create Registry</a></div>
+        </div>
+      </div>
+    </div>
+    <div class="card mt-2">
+      <div class="card-title">Recent Gift Items</div>
+      <div id="recent-gifts"><div class="empty-state"><div class="icon">🎁</div><p>No gifts yet</p></div></div>
+    </div>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    const user = requireRole(['COUPLE']);
+    if (user) {
+      buildNav('nav-links', 'dashboard');
+      document.getElementById('welcome-msg').textContent = `Welcome back, ${user.email}!`;
+      loadDashboard();
+    }
+
+    function statusBadge(s) {
+      return { AVAILABLE:'badge-gray', PARTIALLY_FUNDED:'badge-yellow', FUNDED:'badge-green', PURCHASED:'badge-blue', DELIVERED:'badge-purple' }[s] || 'badge-gray';
+    }
+
+    async function loadDashboard() {
+      try {
+        const res = await authFetch('/api/weddings');
+        if (res.ok) {
+          const data = await res.json();
+          const weddings = data.data || [];
+          document.getElementById('stat-weddings').textContent = weddings.length;
+          if (weddings.length > 0) {
+            const w = weddings[0];
+            document.getElementById('wedding-summary').innerHTML = `
+              <div><strong>${w.brideName} & ${w.groomName}</strong></div>
+              <div class="text-muted">${new Date(w.weddingDate).toLocaleDateString()}</div>
+              <div class="text-muted">${w.location}</div>
+              <div class="mt-1"><span class="badge badge-purple">${w.weddingType}</span></div>
+              <div class="mt-1 text-muted" style="font-size:0.8rem">Invite Code: <strong>${w.inviteCode}</strong></div>`;
+            loadGifts(w.id);
+          }
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadGifts(weddingId) {
+      try {
+        const res = await authFetch(`/api/gifts?weddingProfileId=${weddingId}`);
+        if (res.ok) {
+          const data = await res.json();
+          const gifts = data.data || [];
+          document.getElementById('stat-gifts').textContent = gifts.length;
+          document.getElementById('stat-funded').textContent = gifts.filter(g => g.status === 'FUNDED' || g.status === 'DELIVERED').length;
+          if (gifts.length > 0) {
+            document.getElementById('recent-gifts').innerHTML = `
+              <div class="table-wrap"><table>
+                <thead><tr><th>Gift</th><th>Price</th><th>Status</th><th>Type</th></tr></thead>
+                <tbody>${gifts.slice(0,5).map(g => `
+                  <tr>
+                    <td><strong>${g.name}</strong></td>
+                    <td>${g.price.toLocaleString()} KZT</td>
+                    <td><span class="badge ${statusBadge(g.status)}">${g.status}</span></td>
+                    <td>${g.isPoolGift ? '<span class="badge badge-blue">Pool</span>' : '<span class="badge badge-gray">Single</span>'}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table></div>`;
+          }
+        }
+      } catch (e) { console.error(e); }
+    }
+  </script>
+</body>
+</html>

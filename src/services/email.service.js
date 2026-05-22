@@ -1,7 +1,7 @@
 const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = 'onboarding@resend.dev';
+const FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
 const sendVerificationEmail = async (email, token) => {
   const link = `${process.env.APP_URL}/api/auth/verify-email?token=${token}`;

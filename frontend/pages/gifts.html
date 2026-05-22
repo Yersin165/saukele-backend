@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gifts — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="/">💍 Saukele</a>
+    <div class="nav-links">
+      <a href="/pages/dashboard.html">Dashboard</a>
+      <a href="/pages/registry.html">Registry</a>
+      <a href="/pages/gifts.html" class="active">Gifts</a>
+      <a href="/pages/family.html">Family</a>
+      <a href="/pages/contribute.html">Contribute</a>
+      <a href="/pages/orders.html">Orders</a>
+      <span id="nav-user"></span>
+      <a href="#" onclick="logout()">Logout</a>
+    </div>
+  </nav>
+  <div class="container">
+    <div class="flex-between mb-2">
+      <div><div class="page-title">Gift Items</div><div class="page-subtitle">Manage your wedding wish list</div></div>
+      <button class="btn btn-primary" onclick="openModal()">+ Add Gift</button>
+    </div>
+
+    <div class="alert alert-error" id="err"></div>
+    <div class="alert alert-success" id="msg"></div>
+
+    <div class="card">
+      <div class="flex-between mb-2">
+        <div class="flex gap-1">
+          <select id="filter-status" onchange="loadGifts()" style="padding:0.4rem 0.8rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.85rem">
+            <option value="">All Status</option>
+            <option value="AVAILABLE">Available</option>
+            <option value="PARTIALLY_FUNDED">Partially Funded</option>
+            <option value="FUNDED">Funded</option>
+            <option value="PURCHASED">Purchased</option>
+            <option value="DELIVERED">Delivered</option>
+          </select>
+        </div>
+        <span id="gift-count" class="text-muted"></span>
+      </div>
+      <div id="gifts-list"><div class="empty-state"><div class="icon">🎁</div><p>No gifts yet. Add your first gift!</p></div></div>
+      <div id="load-more" style="display:none;text-align:center;margin-top:1rem">
+        <button class="btn btn-outline" onclick="loadMore()">Load More</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Add Gift Item</h3>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <div class="alert alert-error" id="modal-err"></div>
+      <div class="form-group"><label>Gift Name</label><input id="m-name" placeholder="e.g. KitchenAid Mixer"></div>
+      <div class="form-group"><label>Description</label><textarea id="m-desc" placeholder="Optional description"></textarea></div>
+      <div class="grid-2">
+        <div class="form-group"><label>Price (KZT)</label><input type="number" id="m-price" placeholder="150000"></div>
+        <div class="form-group"><label>Privacy</label>
+          <select id="m-privacy"><option value="PUBLIC">Public</option><option value="FAMILY_ONLY">Family Only</option></select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;padding-top:1.5rem">
+          <input type="checkbox" id="m-pool" onchange="togglePool()" style="width:auto">
+          <label style="margin:0">Pool Gift</label>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;padding-top:1.5rem">
+          <input type="checkbox" id="m-fragile" style="width:auto">
+          <label style="margin:0">Fragile Item</label>
+        </div>
+      </div>
+      <div id="pool-fields" style="display:none">
+        <div class="grid-2">
+          <div class="form-group"><label>Target Amount (KZT)</label><input type="number" id="m-target" placeholder="500000"></div>
+          <div class="form-group"><label>Deadline</label><input type="date" id="m-deadline"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveGift()"><span id="save-btn-text">Add Gift</span></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api';
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (!user) location.href = '/pages/login.html';
+    document.getElementById('nav-user').textContent = user?.email || '';
+
+    let weddingId = null, editingId = null, nextCursor = null;
+
+    async function authFetch(url, opts = {}) {
+      const token = localStorage.getItem('accessToken');
+      opts.headers = { ...opts.headers, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+      let res = await fetch(url, opts);
+      if (res.status === 401) { logout(); }
+      return res;
+    }
+    function logout() { localStorage.clear(); location.href = '/pages/login.html'; }
+    function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.className = 'alert alert-error show'; }
+    function showMsg(m) { const e = document.getElementById('msg'); e.textContent = m; e.className = 'alert alert-success show'; }
+    function statusBadge(s) { return { AVAILABLE:'badge-gray',PARTIALLY_FUNDED:'badge-yellow',FUNDED:'badge-green',PURCHASED:'badge-blue',DELIVERED:'badge-purple' }[s]||'badge-gray'; }
+
+    async function init() {
+      const res = await authFetch(`${API}/weddings`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.data?.length > 0) { weddingId = data.data[0].id; loadGifts(); }
+        else showErr('Create a wedding profile first before adding gifts.');
+      }
+    }
+
+    async function loadGifts(reset = true) {
+      if (!weddingId) return;
+      if (reset) nextCursor = null;
+      const status = document.getElementById('filter-status').value;
+      let url = `${API}/gifts?weddingProfileId=${weddingId}&limit=10`;
+      if (status) url += `&status=${status}`;
+      if (nextCursor) url += `&cursor=${nextCursor}`;
+      const res = await authFetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+      const gifts = data.data || [];
+      nextCursor = data.nextCursor;
+      document.getElementById('load-more').style.display = nextCursor ? 'block' : 'none';
+      document.getElementById('gift-count').textContent = `${gifts.length} item(s)`;
+      if (gifts.length === 0 && reset) {
+        document.getElementById('gifts-list').innerHTML = '<div class="empty-state"><div class="icon">🎁</div><p>No gifts found</p></div>';
+        return;
+      }
+      const rows = gifts.map(g => `
+        <tr>
+          <td><strong>${g.name}</strong>${g.isFragile ? ' <span title="Fragile">⚠️</span>' : ''}<div class="text-muted" style="font-size:0.8rem">${g.description||''}</div></td>
+          <td>${g.price.toLocaleString()} KZT</td>
+          <td>${g.isPoolGift ? `<div class="progress-bar"><div class="fill" style="width:${Math.min(100,(g.currentAmount/g.targetAmount)*100)}%"></div></div><div class="text-muted" style="font-size:0.75rem">${g.currentAmount.toLocaleString()} / ${g.targetAmount?.toLocaleString()} KZT</div>` : 'Single'}</td>
+          <td><span class="badge ${statusBadge(g.status)}">${g.status}</span></td>
+          <td><span class="badge ${g.privacy==='PUBLIC'?'badge-green':'badge-yellow'}">${g.privacy}</span></td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick="editGift('${g.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteGift('${g.id}')">Del</button>
+          </td>
+        </tr>`).join('');
+      const html = `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Price</th><th>Pool</th><th>Status</th><th>Privacy</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      if (reset) document.getElementById('gifts-list').innerHTML = html;
+      else document.getElementById('gifts-list').querySelector('tbody').insertAdjacentHTML('beforeend', rows);
+    }
+
+    function loadMore() { loadGifts(false); }
+    function togglePool() { document.getElementById('pool-fields').style.display = document.getElementById('m-pool').checked ? 'block' : 'none'; }
+
+    function openModal(gift = null) {
+      editingId = gift?.id || null;
+      document.getElementById('modal-title').textContent = gift ? 'Edit Gift' : 'Add Gift Item';
+      document.getElementById('save-btn-text').textContent = gift ? 'Save Changes' : 'Add Gift';
+      document.getElementById('m-name').value = gift?.name || '';
+      document.getElementById('m-desc').value = gift?.description || '';
+      document.getElementById('m-price').value = gift?.price || '';
+      document.getElementById('m-privacy').value = gift?.privacy || 'PUBLIC';
+      document.getElementById('m-pool').checked = gift?.isPoolGift || false;
+      document.getElementById('m-fragile').checked = gift?.isFragile || false;
+      document.getElementById('m-target').value = gift?.targetAmount || '';
+      document.getElementById('m-deadline').value = gift?.deadlineAt?.split('T')[0] || '';
+      document.getElementById('modal-err').className = 'alert alert-error';
+      togglePool();
+      document.getElementById('modal').classList.add('open');
+    }
+
+    function closeModal() { document.getElementById('modal').classList.remove('open'); editingId = null; }
+
+    async function editGift(id) {
+      const res = await authFetch(`${API}/gifts/${id}`);
+      if (res.ok) { const g = await res.json(); openModal(g); }
+    }
+
+    async function saveGift() {
+      const name = document.getElementById('m-name').value.trim();
+      const price = parseFloat(document.getElementById('m-price').value);
+      if (!name || !price) { document.getElementById('modal-err').textContent = 'Name and price are required'; document.getElementById('modal-err').classList.add('show'); return; }
+      const isPool = document.getElementById('m-pool').checked;
+      const body = {
+        weddingProfileId: weddingId,
+        name, price,
+        description: document.getElementById('m-desc').value,
+        privacy: document.getElementById('m-privacy').value,
+        isPoolGift: isPool,
+        isFragile: document.getElementById('m-fragile').checked,
+        ...(isPool && { targetAmount: parseFloat(document.getElementById('m-target').value) || price }),
+        ...(document.getElementById('m-deadline').value && { deadlineAt: document.getElementById('m-deadline').value })
+      };
+      const url = editingId ? `${API}/gifts/${editingId}` : `${API}/gifts`;
+      const method = editingId ? 'PATCH' : 'POST';
+      const res = await authFetch(url, { method, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('modal-err').textContent = data.error?.message || 'Failed'; document.getElementById('modal-err').classList.add('show'); return; }
+      closeModal();
+      showMsg(editingId ? 'Gift updated!' : 'Gift added!');
+      loadGifts();
+    }
+
+    async function deleteGift(id) {
+      if (!confirm('Delete this gift?')) return;
+      const res = await authFetch(`${API}/gifts/${id}`, { method: 'DELETE' });
+      if (!res.ok) { showErr('Delete failed'); return; }
+      showMsg('Gift deleted');
+      loadGifts();
+    }
+
+    init();
+  </script>
+</body>
+</html>

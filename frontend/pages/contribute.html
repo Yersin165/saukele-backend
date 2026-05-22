@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contribute — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="/">💍 Saukele</a>
+    <div class="nav-links" id="nav-links"></div>
+  </nav>
+  <div class="container">
+    <div class="page-title">Make a Contribution</div>
+    <div class="page-subtitle">Contribute to a pool gift using a wedding invite code</div>
+    <div class="alert alert-error" id="err"></div>
+    <div class="alert alert-success" id="msg"></div>
+
+    <div class="card">
+      <div class="card-title">Find Registry by Invite Code</div>
+      <div style="display:flex;gap:0.5rem">
+        <input id="invite-code" placeholder="Enter invite code" style="flex:1;padding:0.6rem 0.9rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.95rem">
+        <button class="btn btn-primary" onclick="findRegistry()">Find</button>
+      </div>
+    </div>
+
+    <div id="registry-info" style="display:none" class="card">
+      <div class="card-title" id="registry-title"></div>
+      <div id="pool-gifts-list"></div>
+    </div>
+
+    <div id="contribute-form" style="display:none" class="card">
+      <div class="card-title">Contribute to: <span id="selected-gift-name" style="color:#6366f1"></span></div>
+      <div id="gift-progress" class="mb-2"></div>
+      <div class="grid-2">
+        <div class="form-group"><label>Amount</label><input type="number" id="c-amount" placeholder="e.g. 10000"></div>
+        <div class="form-group"><label>Currency</label>
+          <select id="c-currency"><option value="KZT">KZT</option><option value="USD">USD</option></select>
+        </div>
+      </div>
+      <div style="background:#eff6ff;padding:0.75rem;border-radius:8px;font-size:0.85rem;margin-bottom:1rem">
+        💡 1 USD = 450 KZT. Rate is locked at transaction time.
+      </div>
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn btn-outline" onclick="cancelContribute()">Cancel</button>
+        <button class="btn btn-success" onclick="submitContribution()"><span id="contrib-btn">Contribute</span></button>
+      </div>
+    </div>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    const user = requireRole(['GUEST']);
+    let selectedGiftId = null;
+    if (user) buildNav('nav-links', 'contribute');
+
+    function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.className = 'alert alert-error show'; }
+    function showMsg(m) { const e = document.getElementById('msg'); e.textContent = m; e.className = 'alert alert-success show'; }
+
+    async function findRegistry() {
+      const code = document.getElementById('invite-code').value.trim();
+      if (!code) { showErr('Enter an invite code'); return; }
+      const res = await authFetch(`/api/weddings/by-invite/${code}`);
+      if (!res.ok) { showErr('Registry not found'); return; }
+      const wedding = await res.json();
+      document.getElementById('registry-title').textContent = `💍 ${wedding.brideName} & ${wedding.groomName} — ${new Date(wedding.weddingDate).toLocaleDateString()}`;
+      const giftsRes = await authFetch(`/api/gifts?weddingProfileId=${wedding.id}`);
+      if (!giftsRes.ok) { showErr('Could not load gifts'); return; }
+      const data = await giftsRes.json();
+      const poolGifts = (data.data || []).filter(g => g.isPoolGift && g.status !== 'FUNDED' && g.status !== 'DELIVERED');
+      if (!poolGifts.length) {
+        document.getElementById('pool-gifts-list').innerHTML = '<div class="empty-state"><div class="icon">🎁</div><p>No pool gifts available</p></div>';
+      } else {
+        document.getElementById('pool-gifts-list').innerHTML = poolGifts.map(g => `
+          <div class="card" style="margin:0.5rem 0;cursor:pointer" onclick="selectGift('${g.id}','${g.name}',${g.currentAmount},${g.targetAmount})">
+            <div class="flex-between">
+              <div><strong>${g.name}</strong>${g.isFragile?' ⚠️':''}</div>
+              <span class="badge badge-blue">Pool Gift</span>
+            </div>
+            <div class="progress-bar mt-1"><div class="fill" style="width:${Math.min(100,(g.currentAmount/g.targetAmount)*100)}%"></div></div>
+            <div class="text-muted" style="font-size:0.8rem">${g.currentAmount.toLocaleString()} / ${g.targetAmount.toLocaleString()} KZT</div>
+          </div>`).join('');
+      }
+      document.getElementById('registry-info').style.display = 'block';
+      document.getElementById('err').className = 'alert alert-error';
+    }
+
+    function selectGift(id, name, current, target) {
+      selectedGiftId = id;
+      document.getElementById('selected-gift-name').textContent = name;
+      const pct = Math.min(100, Math.round((current/target)*100));
+      document.getElementById('gift-progress').innerHTML = `
+        <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
+        <div class="text-muted">${current.toLocaleString()} / ${target.toLocaleString()} KZT (${pct}%)</div>`;
+      document.getElementById('contribute-form').style.display = 'block';
+      document.getElementById('contribute-form').scrollIntoView({ behavior:'smooth' });
+    }
+
+    function cancelContribute() { selectedGiftId = null; document.getElementById('contribute-form').style.display = 'none'; }
+
+    async function submitContribution() {
+      if (!selectedGiftId) return;
+      const amount = parseFloat(document.getElementById('c-amount').value);
+      const currency = document.getElementById('c-currency').value;
+      if (!amount || amount <= 0) { showErr('Enter a valid amount'); return; }
+      document.getElementById('contrib-btn').innerHTML = '<span class="spinner"></span>';
+      const res = await authFetch('/api/contributions', {
+        method: 'POST',
+        body: JSON.stringify({ giftItemId: selectedGiftId, amountOriginal: amount, currency, idempotencyKey: `idem-${Date.now()}-${Math.random().toString(36).slice(2)}` })
+      });
+      const data = await res.json();
+      document.getElementById('contrib-btn').textContent = 'Contribute';
+      if (!res.ok) { showErr(data.error?.message || 'Failed'); return; }
+      showMsg(`✅ Contribution of ${amount} ${currency} submitted! The couple will be notified.`);
+      cancelContribute();
+    }
+  </script>
+</body>
+</html>

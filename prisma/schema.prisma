@@ -47,6 +47,7 @@ enum GiftStatus {
 enum GiftPrivacy {
   PUBLIC
   FAMILY_ONLY
+  PRIVATE
 }
 
 enum ContributionStatus {

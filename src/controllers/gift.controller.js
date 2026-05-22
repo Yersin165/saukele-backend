@@ -11,7 +11,10 @@ const create = async (req, res) => {
 
 const list = async (req, res) => {
   try {
-    const { weddingProfileId, status, cursor, limit } = req.query;
+    let { weddingProfileId, status, cursor, limit } = req.query;
+    if (!weddingProfileId && req.user.role === 'VENDOR') {
+      weddingProfileId = await giftService.getVendorProductsWeddingProfileId();
+    }
     if (!weddingProfileId) return res.status(400).json({ message: 'weddingProfileId is required' });
     const result = await giftService.list({ weddingProfileId, status, cursor, limit: parseInt(limit) || 20 });
     res.status(200).json(result);

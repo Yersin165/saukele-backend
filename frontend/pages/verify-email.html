@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Email — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="logo"><h1>💍 Saukele</h1></div>
+      <div id="loading" style="text-align:center;padding:2rem">
+        <div class="spinner" style="width:40px;height:40px;border-color:#6366f1;border-top-color:transparent;margin:0 auto 1rem"></div>
+        <p>Verifying your email...</p>
+      </div>
+      <div id="result" style="display:none;text-align:center;padding:1rem">
+        <div id="result-icon" style="font-size:4rem;margin-bottom:1rem"></div>
+        <h2 id="result-title"></h2>
+        <p id="result-msg" style="color:#64748b;margin:1rem 0"></p>
+        <a href="/pages/login.html" class="btn btn-primary">Go to Login</a>
+      </div>
+    </div>
+  </div>
+  <script>
+    const API = '/api';
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+
+    async function verify() {
+      if (!token) { showResult('❌', 'Invalid Link', 'No verification token found.'); return; }
+      try {
+        const res = await fetch(`${API}/auth/verify-email?token=${token}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || 'Verification failed');
+        showResult('✅', 'Email Verified!', 'Your account is now active. You can log in.');
+      } catch (e) {
+        showResult('❌', 'Verification Failed', e.message);
+      }
+    }
+
+    function showResult(icon, title, msg) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('result').style.display = 'block';
+      document.getElementById('result-icon').textContent = icon;
+      document.getElementById('result-title').textContent = title;
+      document.getElementById('result-msg').textContent = msg;
+    }
+
+    verify();
+  </script>
+</body>
+</html>

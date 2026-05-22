@@ -62,6 +62,44 @@ describe('Gift creation', () => {
   });
 });
 
+describe('Vendor gift flow', () => {
+  let vendorToken;
+
+  beforeEach(async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'vendor@example.com', password: 'StrongPass123!', role: 'VENDOR' });
+    vendorToken = res.body.accessToken;
+    await prisma.user.update({ where: { email: 'vendor@example.com' }, data: { isVerified: true } });
+  });
+
+  it('creates a vendor gift without weddingProfileId', async () => {
+    const res = await request(app)
+      .post('/api/gifts')
+      .set('Authorization', `Bearer ${vendorToken}`)
+      .send({ name: 'Vendor Item', price: 5000, description: 'For sale' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('Vendor Item');
+    expect(res.body.weddingProfileId).toBeDefined();
+  });
+
+  it('lists vendor gifts when no weddingProfileId is provided', async () => {
+    await request(app)
+      .post('/api/gifts')
+      .set('Authorization', `Bearer ${vendorToken}`)
+      .send({ name: 'Vendor Item 2', price: 8000, description: 'Another item' });
+
+    const res = await request(app)
+      .get('/api/gifts')
+      .set('Authorization', `Bearer ${vendorToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(res.body.data[0]).toHaveProperty('name');
+  });
+});
+
 describe('Gift status transitions via contributions', () => {
   let guestToken, giftId;
 

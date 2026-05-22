@@ -8,4 +8,9 @@ const connection = new IORedis(process.env.REDIS_URL, {
 const emailQueue = new Queue('emails', { connection });
 const giftQueue = new Queue('gifts', { connection });
 
-module.exports = { emailQueue, giftQueue, connection };
+async function closeQueues() {
+  await Promise.all([emailQueue.close(), giftQueue.close()]);
+  await connection.quit();
+}
+
+module.exports = { emailQueue, giftQueue, connection, closeQueues };

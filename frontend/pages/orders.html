@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orders — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="/">💍 Saukele</a>
+    <div class="nav-links" id="nav-links"></div>
+  </nav>
+  <div class="container">
+    <div class="page-title" id="page-title">Orders & Deliveries</div>
+    <div class="page-subtitle" id="page-subtitle"></div>
+    <div class="alert alert-error" id="err"></div>
+    <div class="alert alert-success" id="msg"></div>
+
+    <div id="couple-section" style="display:none">
+      <div class="card">
+        <div class="flex-between mb-2">
+          <div class="card-title" style="margin:0">Orders</div>
+          <button class="btn btn-primary btn-sm" onclick="openOrderModal()">+ Create Order</button>
+        </div>
+        <div id="orders-list"><div class="empty-state"><div class="icon">📦</div><p>No orders yet</p></div></div>
+      </div>
+    </div>
+
+    <div id="courier-section" style="display:none">
+      <div class="card">
+        <div class="flex-between mb-2">
+          <div class="card-title" style="margin:0">My Deliveries</div>
+          <button class="btn btn-outline btn-sm" onclick="openDeliveryModal()">+ Assign Delivery</button>
+        </div>
+        <div id="deliveries-list"><div class="empty-state"><div class="icon">🚚</div><p>No deliveries assigned</p></div></div>
+      </div>
+    </div>
+
+    <div id="vendor-orders-section" style="display:none">
+      <div class="card">
+        <div class="card-title">Incoming Orders</div>
+        <div id="vendor-orders-list"><div class="empty-state"><div class="icon">📦</div><p>No orders yet</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="order-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>Create Order</h3><button class="modal-close" onclick="closeOrderModal()">×</button></div>
+      <div class="alert alert-error" id="om-err"></div>
+      <div class="form-group"><label>Gift Item ID</label><input id="om-giftId" placeholder="Gift item UUID"></div>
+      <div class="form-group"><label>Vendor ID</label><input id="om-vendorId" placeholder="Vendor UUID"></div>
+      <div class="form-group"><label>Total Amount (KZT)</label><input type="number" id="om-amount"></div>
+      <div class="form-group"><label>Notes (optional)</label><textarea id="om-notes"></textarea></div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeOrderModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="createOrder()">Create Order</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="delivery-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>Assign Delivery</h3><button class="modal-close" onclick="closeDeliveryModal()">×</button></div>
+      <div class="alert alert-error" id="dm-err"></div>
+      <div class="form-group"><label>Order ID</label><input id="dm-orderId"></div>
+      <div class="form-group"><label>Gift Item ID</label><input id="dm-giftId"></div>
+      <div class="form-group"><label>Courier ID</label><input id="dm-courierId"></div>
+      <div class="grid-2">
+        <div class="form-group"><label>Destination Lat</label><input type="number" id="dm-lat" step="any"></div>
+        <div class="form-group"><label>Destination Lng</label><input type="number" id="dm-lng" step="any"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:0.4rem;margin-bottom:1rem"><input type="checkbox" id="dm-fragile"> Fragile ⚠️</label>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeDeliveryModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="createDelivery()">Assign</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    const user = requireRole(['COUPLE', 'VENDOR', 'COURIER']);
+    if (user) {
+      buildNav('nav-links', 'orders');
+      const role = user.role;
+      if (role === 'COUPLE') {
+        document.getElementById('page-subtitle').textContent = 'Manage gift orders';
+        document.getElementById('couple-section').style.display = 'block';
+        loadOrders();
+      } else if (role === 'COURIER') {
+        document.getElementById('page-title').textContent = 'My Deliveries';
+        document.getElementById('page-subtitle').textContent = 'Track and update delivery status';
+        document.getElementById('courier-section').style.display = 'block';
+        loadDeliveries();
+      } else if (role === 'VENDOR') {
+        document.getElementById('page-title').textContent = 'Incoming Orders';
+        document.getElementById('page-subtitle').textContent = 'Orders from couples for your gifts';
+        document.getElementById('vendor-orders-section').style.display = 'block';
+        loadVendorOrders();
+      }
+    }
+
+    function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.className = 'alert alert-error show'; }
+    function showMsg(m) { const e = document.getElementById('msg'); e.textContent = m; e.className = 'alert alert-success show'; }
+    const orderBadge = { PLACED:'badge-gray', CONFIRMED:'badge-blue', READY_FOR_PICKUP:'badge-yellow', PICKED_UP:'badge-purple', DELIVERED:'badge-green' };
+    const deliveryBadge = { ASSIGNED:'badge-blue', IN_TRANSIT:'badge-yellow', GEOFENCE_TRIGGERED:'badge-purple', DELIVERED:'badge-green' };
+
+    async function loadOrders() {
+      const res = await authFetch('/api/orders');
+      if (!res.ok) return;
+      const data = await res.json();
+      const orders = data.data || data || [];
+      if (!orders.length) return;
+      document.getElementById('orders-list').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>ID</th><th>Amount</th><th>Status</th><th>Notes</th><th>Update</th></tr></thead>
+          <tbody>${orders.map(o=>`
+            <tr>
+              <td style="font-family:monospace;font-size:0.75rem">${o.id.slice(0,8)}...</td>
+              <td>${o.totalAmount.toLocaleString()} KZT</td>
+              <td><span class="badge ${orderBadge[o.status]||'badge-gray'}">${o.status}</span></td>
+              <td>${o.notes||'—'}</td>
+              <td><select onchange="updateOrderStatus('${o.id}',this.value)" style="padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:0.8rem">
+                <option value="">Update...</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="READY_FOR_PICKUP">Ready for Pickup</option>
+                <option value="PICKED_UP">Picked Up</option>
+                <option value="DELIVERED">Delivered</option>
+              </select></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function loadDeliveries() {
+      const res = await authFetch('/api/deliveries');
+      if (!res.ok) return;
+      const data = await res.json();
+      const deliveries = data.data || data || [];
+      if (!deliveries.length) return;
+      document.getElementById('deliveries-list').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>ID</th><th>Status</th><th>Fragile</th><th>Destination</th><th>Update</th></tr></thead>
+          <tbody>${deliveries.map(d=>`
+            <tr>
+              <td style="font-family:monospace;font-size:0.75rem">${d.id.slice(0,8)}...</td>
+              <td><span class="badge ${deliveryBadge[d.status]||'badge-gray'}">${d.status}</span></td>
+              <td>${d.isFragile?'⚠️ Yes':'No'}</td>
+              <td>${d.destinationLat?.toFixed(4)}, ${d.destinationLng?.toFixed(4)}</td>
+              <td><select onchange="updateDeliveryStatus('${d.id}',this.value)" style="padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:0.8rem">
+                <option value="">Update...</option>
+                <option value="IN_TRANSIT">In Transit</option>
+                <option value="GEOFENCE_TRIGGERED">Geofence Triggered</option>
+                <option value="DELIVERED">Delivered</option>
+              </select></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function loadVendorOrders() {
+      const res = await authFetch('/api/orders');
+      if (!res.ok) return;
+      const data = await res.json();
+      const orders = data.data || data || [];
+      if (!orders.length) return;
+      document.getElementById('vendor-orders-list').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>ID</th><th>Amount</th><th>Status</th><th>Update</th></tr></thead>
+          <tbody>${orders.map(o=>`
+            <tr>
+              <td style="font-family:monospace;font-size:0.75rem">${o.id.slice(0,8)}...</td>
+              <td>${o.totalAmount.toLocaleString()} KZT</td>
+              <td><span class="badge ${orderBadge[o.status]||'badge-gray'}">${o.status}</span></td>
+              <td><select onchange="updateOrderStatus('${o.id}',this.value)" style="padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:0.8rem">
+                <option value="">Update...</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="READY_FOR_PICKUP">Ready for Pickup</option>
+              </select></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function updateOrderStatus(id, status) {
+      if (!status) return;
+      const res = await authFetch(`/api/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      if (!res.ok) { showErr('Update failed'); return; }
+      showMsg('Status updated'); loadOrders();
+    }
+
+    async function updateDeliveryStatus(id, status) {
+      if (!status) return;
+      const res = await authFetch(`/api/deliveries/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      if (!res.ok) { showErr('Update failed'); return; }
+      showMsg('Delivery updated'); loadDeliveries();
+    }
+
+    function openOrderModal() { document.getElementById('order-modal').classList.add('open'); }
+    function closeOrderModal() { document.getElementById('order-modal').classList.remove('open'); }
+    function openDeliveryModal() { document.getElementById('delivery-modal').classList.add('open'); }
+    function closeDeliveryModal() { document.getElementById('delivery-modal').classList.remove('open'); }
+
+    async function createOrder() {
+      const body = { giftItemId: document.getElementById('om-giftId').value.trim(), vendorId: document.getElementById('om-vendorId').value.trim(), totalAmount: parseFloat(document.getElementById('om-amount').value), notes: document.getElementById('om-notes').value };
+      if (!body.giftItemId || !body.vendorId || !body.totalAmount) { document.getElementById('om-err').textContent = 'Fill required fields'; document.getElementById('om-err').classList.add('show'); return; }
+      const res = await authFetch('/api/orders', { method: 'POST', body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('om-err').textContent = data.error?.message || 'Failed'; document.getElementById('om-err').classList.add('show'); return; }
+      showMsg('Order created!'); closeOrderModal(); loadOrders();
+    }
+
+    async function createDelivery() {
+      const body = { orderId: document.getElementById('dm-orderId').value.trim(), giftItemId: document.getElementById('dm-giftId').value.trim(), courierId: document.getElementById('dm-courierId').value.trim(), destinationLat: parseFloat(document.getElementById('dm-lat').value), destinationLng: parseFloat(document.getElementById('dm-lng').value), isFragile: document.getElementById('dm-fragile').checked };
+      if (!body.orderId || !body.courierId) { document.getElementById('dm-err').textContent = 'Fill required fields'; document.getElementById('dm-err').classList.add('show'); return; }
+      const res = await authFetch('/api/deliveries', { method: 'POST', body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('dm-err').textContent = data.error?.message || 'Failed'; document.getElementById('dm-err').classList.add('show'); return; }
+      showMsg('Delivery assigned!'); closeDeliveryModal(); loadDeliveries();
+    }
+  </script>
+</body>
+</html>

@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-  "start": "node src/app.js",
-  "dev": "nodemon src/app.js",
-  "worker": "node src/jobs/worker.js",
-  "test": "NODE_ENV=test jest --forceExit --runInBand",
-  "migrate": "npx prisma migrate deploy",
-  "generate": "npx prisma generate"
-},
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "worker": "node src/jobs/worker.js",
+    "test": "NODE_ENV=test jest --runInBand",
+    "migrate": "npx prisma migrate deploy",
+    "generate": "npx prisma generate"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -24,6 +24,7 @@
     "express-rate-limit": "^7.1.5",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.2",
+    "rate-limit-redis": "^4.3.1",
     "resend": "^6.12.3",
     "swagger-ui-express": "^5.0.1",
     "yaml": "^2.8.3"

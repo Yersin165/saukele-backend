@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registry — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="/">💍 Saukele</a>
+    <div class="nav-links" id="nav-links"></div>
+  </nav>
+  <div class="container">
+    <div class="page-title">Wedding Registry</div>
+    <div class="page-subtitle">Create and manage your wedding profile</div>
+    <div class="alert alert-error" id="err"></div>
+    <div class="alert alert-success" id="msg"></div>
+
+    <div id="create-section" style="display:none">
+      <div class="card">
+        <div class="card-title">Create Wedding Profile</div>
+        <div class="grid-2">
+          <div class="form-group"><label>Bride's Name</label><input id="brideName" placeholder="e.g. Aisha"></div>
+          <div class="form-group"><label>Groom's Name</label><input id="groomName" placeholder="e.g. Alibek"></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label>Wedding Date</label><input type="date" id="weddingDate"></div>
+          <div class="form-group"><label>Wedding Type</label>
+            <select id="weddingType"><option value="CITY">City</option><option value="VILLAGE">Village</option></select>
+          </div>
+        </div>
+        <div class="form-group"><label>Location</label><input id="location" placeholder="e.g. Almaty, Kazakhstan"></div>
+        <button class="btn btn-primary" onclick="createWedding()">Create Registry</button>
+      </div>
+    </div>
+
+    <div id="profile-section" style="display:none">
+      <div class="card">
+        <div class="flex-between mb-2">
+          <div class="card-title" style="margin:0">Wedding Profile</div>
+          <button class="btn btn-danger btn-sm" onclick="deleteWedding()">Delete</button>
+        </div>
+        <div class="grid-2">
+          <div><span class="text-muted">Couple</span><div id="p-couple" style="font-weight:600;font-size:1.1rem"></div></div>
+          <div><span class="text-muted">Date</span><div id="p-date"></div></div>
+          <div><span class="text-muted">Location</span><div id="p-location"></div></div>
+          <div><span class="text-muted">Type</span><div id="p-type"></div></div>
+        </div>
+        <div class="mt-2" style="background:#f8f7ff;padding:1rem;border-radius:8px">
+          <span class="text-muted">Invite Code (share with guests):</span>
+          <div style="font-size:1.3rem;font-weight:700;color:#6366f1;letter-spacing:2px" id="p-invite"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Update Profile</div>
+        <div class="grid-2">
+          <div class="form-group"><label>Bride's Name</label><input id="u-brideName"></div>
+          <div class="form-group"><label>Groom's Name</label><input id="u-groomName"></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label>Wedding Date</label><input type="date" id="u-weddingDate"></div>
+          <div class="form-group"><label>Type</label>
+            <select id="u-weddingType"><option value="CITY">City</option><option value="VILLAGE">Village</option></select>
+          </div>
+        </div>
+        <div class="form-group"><label>Location</label><input id="u-location"></div>
+        <button class="btn btn-primary" onclick="updateWedding()">Save Changes</button>
+      </div>
+
+      <div class="card">
+        <div class="flex-between mb-2">
+          <div class="card-title" style="margin:0">Gift Items</div>
+          <button class="btn btn-primary btn-sm" onclick="openGiftModal()">+ Add Gift</button>
+        </div>
+        <div id="gifts-list"><div class="empty-state"><div class="icon">🎁</div><p>No gifts yet</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="gift-modal">
+    <div class="modal">
+      <div class="modal-header"><h3 id="gm-title">Add Gift</h3><button class="modal-close" onclick="closeGiftModal()">×</button></div>
+      <div class="alert alert-error" id="gm-err"></div>
+      <div class="form-group"><label>Gift Name</label><input id="gm-name" placeholder="e.g. KitchenAid Mixer"></div>
+      <div class="form-group"><label>Description</label><textarea id="gm-desc"></textarea></div>
+      <div class="grid-2">
+        <div class="form-group"><label>Price (KZT)</label><input type="number" id="gm-price"></div>
+        <div class="form-group"><label>Privacy</label>
+          <select id="gm-privacy"><option value="PUBLIC">Public</option><option value="FAMILY_ONLY">Family Only</option></select>
+        </div>
+      </div>
+      <div style="display:flex;gap:1rem;margin-bottom:1rem">
+        <label style="display:flex;align-items:center;gap:0.4rem"><input type="checkbox" id="gm-pool" onchange="togglePool()"> Pool Gift</label>
+        <label style="display:flex;align-items:center;gap:0.4rem"><input type="checkbox" id="gm-fragile"> Fragile ⚠️</label>
+      </div>
+      <div id="pool-fields" style="display:none">
+        <div class="grid-2">
+          <div class="form-group"><label>Target Amount (KZT)</label><input type="number" id="gm-target"></div>
+          <div class="form-group"><label>Deadline</label><input type="date" id="gm-deadline"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeGiftModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveGift()"><span id="gm-btn">Add Gift</span></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    const user = requireRole(['COUPLE']);
+    let currentWedding = null, editingGiftId = null;
+    if (user) { buildNav('nav-links', 'registry'); loadWedding(); }
+
+    function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.className = 'alert alert-error show'; }
+    function showMsg(m) { const e = document.getElementById('msg'); e.textContent = m; e.className = 'alert alert-success show'; }
+    function statusBadge(s) { return { AVAILABLE:'badge-gray',PARTIALLY_FUNDED:'badge-yellow',FUNDED:'badge-green',PURCHASED:'badge-blue',DELIVERED:'badge-purple' }[s]||'badge-gray'; }
+    function togglePool() { document.getElementById('pool-fields').style.display = document.getElementById('gm-pool').checked ? 'block' : 'none'; }
+
+    async function loadWedding() {
+      const res = await authFetch('/api/weddings');
+      if (!res.ok) { document.getElementById('create-section').style.display = 'block'; return; }
+      const data = await res.json();
+      const weddings = data.data || [];
+      if (!weddings.length) { document.getElementById('create-section').style.display = 'block'; return; }
+      currentWedding = weddings[0];
+      renderProfile(currentWedding);
+      document.getElementById('profile-section').style.display = 'block';
+      loadGifts();
+    }
+
+    function renderProfile(w) {
+      document.getElementById('p-couple').textContent = `${w.brideName} & ${w.groomName}`;
+      document.getElementById('p-date').textContent = new Date(w.weddingDate).toLocaleDateString();
+      document.getElementById('p-location').textContent = w.location;
+      document.getElementById('p-type').textContent = w.weddingType;
+      document.getElementById('p-invite').textContent = w.inviteCode;
+      document.getElementById('u-brideName').value = w.brideName;
+      document.getElementById('u-groomName').value = w.groomName;
+      document.getElementById('u-weddingDate').value = w.weddingDate?.split('T')[0];
+      document.getElementById('u-location').value = w.location;
+      document.getElementById('u-weddingType').value = w.weddingType;
+    }
+
+    async function loadGifts() {
+      const res = await authFetch(`/api/gifts?weddingProfileId=${currentWedding.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const gifts = data.data || [];
+      if (!gifts.length) return;
+      document.getElementById('gifts-list').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Name</th><th>Price</th><th>Pool</th><th>Status</th><th>Privacy</th><th>Actions</th></tr></thead>
+          <tbody>${gifts.map(g => `
+            <tr>
+              <td><strong>${g.name}</strong>${g.isFragile?' ⚠️':''}</td>
+              <td>${g.price.toLocaleString()} KZT</td>
+              <td>${g.isPoolGift ? `<div class="progress-bar"><div class="fill" style="width:${Math.min(100,(g.currentAmount/g.targetAmount)*100)}%"></div></div><div class="text-muted" style="font-size:0.75rem">${g.currentAmount.toLocaleString()}/${g.targetAmount?.toLocaleString()} KZT</div>` : 'Single'}</td>
+              <td><span class="badge ${statusBadge(g.status)}">${g.status}</span></td>
+              <td><span class="badge ${g.privacy==='PUBLIC'?'badge-green':'badge-yellow'}">${g.privacy}</span></td>
+              <td>
+                <button class="btn btn-outline btn-sm" onclick="editGift('${g.id}')">Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteGift('${g.id}')">Del</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`;
+    }
+
+    async function createWedding() {
+      const body = { brideName: document.getElementById('brideName').value, groomName: document.getElementById('groomName').value, weddingDate: document.getElementById('weddingDate').value, location: document.getElementById('location').value, weddingType: document.getElementById('weddingType').value };
+      if (!body.brideName || !body.groomName || !body.weddingDate || !body.location) { showErr('Please fill in all fields'); return; }
+      const res = await authFetch('/api/weddings', { method: 'POST', body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { showErr(data.error?.message || 'Failed'); return; }
+      showMsg('Wedding profile created!');
+      currentWedding = data;
+      document.getElementById('create-section').style.display = 'none';
+      document.getElementById('profile-section').style.display = 'block';
+      renderProfile(data);
+    }
+
+    async function updateWedding() {
+      const body = { brideName: document.getElementById('u-brideName').value, groomName: document.getElementById('u-groomName').value, weddingDate: document.getElementById('u-weddingDate').value, location: document.getElementById('u-location').value, weddingType: document.getElementById('u-weddingType').value };
+      const res = await authFetch(`/api/weddings/${currentWedding.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { showErr(data.error?.message || 'Failed'); return; }
+      showMsg('Profile updated!'); currentWedding = data; renderProfile(data);
+    }
+
+    async function deleteWedding() {
+      if (!confirm('Delete your wedding profile? This cannot be undone.')) return;
+      const res = await authFetch(`/api/weddings/${currentWedding.id}`, { method: 'DELETE' });
+      if (!res.ok) { showErr('Delete failed'); return; }
+      showMsg('Deleted.'); setTimeout(() => location.reload(), 1500);
+    }
+
+    function openGiftModal(gift = null) {
+      editingGiftId = gift?.id || null;
+      document.getElementById('gm-title').textContent = gift ? 'Edit Gift' : 'Add Gift';
+      document.getElementById('gm-btn').textContent = gift ? 'Save' : 'Add Gift';
+      document.getElementById('gm-name').value = gift?.name || '';
+      document.getElementById('gm-desc').value = gift?.description || '';
+      document.getElementById('gm-price').value = gift?.price || '';
+      document.getElementById('gm-privacy').value = gift?.privacy || 'PUBLIC';
+      document.getElementById('gm-pool').checked = gift?.isPoolGift || false;
+      document.getElementById('gm-fragile').checked = gift?.isFragile || false;
+      document.getElementById('gm-target').value = gift?.targetAmount || '';
+      document.getElementById('gm-deadline').value = gift?.deadlineAt?.split('T')[0] || '';
+      document.getElementById('gm-err').className = 'alert alert-error';
+      togglePool();
+      document.getElementById('gift-modal').classList.add('open');
+    }
+
+    function closeGiftModal() { document.getElementById('gift-modal').classList.remove('open'); editingGiftId = null; }
+
+    async function editGift(id) {
+      const res = await authFetch(`/api/gifts/${id}`);
+      if (res.ok) { openGiftModal(await res.json()); }
+    }
+
+    async function saveGift() {
+      const isPool = document.getElementById('gm-pool').checked;
+      const body = { weddingProfileId: currentWedding.id, name: document.getElementById('gm-name').value.trim(), price: parseFloat(document.getElementById('gm-price').value), description: document.getElementById('gm-desc').value, privacy: document.getElementById('gm-privacy').value, isPoolGift: isPool, isFragile: document.getElementById('gm-fragile').checked, ...(isPool && { targetAmount: parseFloat(document.getElementById('gm-target').value) }), ...(document.getElementById('gm-deadline').value && { deadlineAt: document.getElementById('gm-deadline').value }) };
+      if (!body.name || !body.price) { document.getElementById('gm-err').textContent = 'Name and price required'; document.getElementById('gm-err').classList.add('show'); return; }
+      const url = editingGiftId ? `/api/gifts/${editingGiftId}` : '/api/gifts';
+      const method = editingGiftId ? 'PATCH' : 'POST';
+      const res = await authFetch(url, { method, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('gm-err').textContent = data.error?.message || 'Failed'; document.getElementById('gm-err').classList.add('show'); return; }
+      closeGiftModal(); showMsg(editingGiftId ? 'Gift updated!' : 'Gift added!'); loadGifts();
+    }
+
+    async function deleteGift(id) {
+      if (!confirm('Delete this gift?')) return;
+      const res = await authFetch(`/api/gifts/${id}`, { method: 'DELETE' });
+      if (!res.ok) { showErr('Delete failed'); return; }
+      showMsg('Gift deleted'); loadGifts();
+    }
+  </script>
+</body>
+</html>

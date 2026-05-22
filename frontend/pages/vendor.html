@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vendor — Saukele</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="/">💍 Saukele</a>
+    <div class="nav-links" id="nav-links"></div>
+  </nav>
+  <div class="container">
+    <div class="page-title">Vendor Dashboard</div>
+    <div class="page-subtitle">Manage your shop and gift listings</div>
+    <div class="alert alert-error" id="err"></div>
+    <div class="alert alert-success" id="msg"></div>
+
+    <div id="create-vendor" style="display:none" class="card">
+      <div class="card-title">Register as Vendor</div>
+      <div class="form-group"><label>Shop Name</label><input id="v-shopName" placeholder="My Gift Shop"></div>
+      <div class="form-group"><label>Description</label><textarea id="v-desc"></textarea></div>
+      <div class="form-group"><label>Phone</label><input id="v-phone" placeholder="+7 777 123 4567"></div>
+      <button class="btn btn-primary" onclick="createVendor()">Register Shop</button>
+    </div>
+
+    <div id="vendor-profile" style="display:none">
+      <div class="card">
+        <div class="flex-between">
+          <div>
+            <div class="card-title" id="v-name"></div>
+            <div class="text-muted" id="v-desc-show"></div>
+            <div class="text-muted" id="v-phone-show"></div>
+          </div>
+          <div id="v-status-badge"></div>
+        </div>
+        <div class="alert alert-info show mt-2" id="pending-msg" style="display:none!important">
+          ⏳ Pending admin approval. You'll receive an email once approved.
+        </div>
+      </div>
+      <div class="card mt-2">
+        <div class="flex-between mb-2">
+          <div class="card-title" style="margin:0">My Gift Listings</div>
+          <button class="btn btn-primary btn-sm" onclick="openGiftModal()">+ Add Listing</button>
+        </div>
+        <div id="vendor-gifts"><div class="empty-state"><div class="icon">🛍️</div><p>No listings yet</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="gift-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>Add Gift Listing</h3><button class="modal-close" onclick="closeGiftModal()">×</button></div>
+      <div class="alert alert-error" id="gm-err"></div>
+      <div class="form-group"><label>Gift Name</label><input id="gm-name"></div>
+      <div class="form-group"><label>Description</label><textarea id="gm-desc"></textarea></div>
+      <div class="form-group"><label>Price (KZT)</label><input type="number" id="gm-price"></div>
+      <label style="display:flex;align-items:center;gap:0.4rem;margin-bottom:1rem"><input type="checkbox" id="gm-fragile"> Fragile Item ⚠️</label>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeGiftModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="addVendorGift()">Add Listing</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    const user = requireRole(['VENDOR']);
+    let vendorId = null;
+    if (user) { buildNav('nav-links', 'vendor'); init(); }
+
+    function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.className = 'alert alert-error show'; }
+    function showMsg(m) { const e = document.getElementById('msg'); e.textContent = m; e.className = 'alert alert-success show'; }
+
+    async function init() {
+      const res = await authFetch('/api/vendors/my');
+      if (res.status === 404) { document.getElementById('create-vendor').style.display = 'block'; return; }
+      if (res.ok) { const v = await res.json(); vendorId = v.id; renderVendor(v); loadVendorGifts(); }
+    }
+
+    function renderVendor(v) {
+      document.getElementById('v-name').textContent = v.shopName;
+      document.getElementById('v-desc-show').textContent = v.description || '';
+      document.getElementById('v-phone-show').textContent = v.phone;
+      const colors = { PENDING:'badge-yellow', APPROVED:'badge-green', SUSPENDED:'badge-red' };
+      document.getElementById('v-status-badge').innerHTML = `<span class="badge ${colors[v.status]}">${v.status}</span>`;
+      if (v.status === 'PENDING') document.getElementById('pending-msg').style.removeProperty('display');
+      document.getElementById('vendor-profile').style.display = 'block';
+    }
+
+    async function createVendor() {
+      const body = { shopName: document.getElementById('v-shopName').value, description: document.getElementById('v-desc').value, phone: document.getElementById('v-phone').value };
+      if (!body.shopName || !body.phone) { showErr('Shop name and phone required'); return; }
+      const res = await authFetch('/api/vendors', { method: 'POST', body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { showErr(data.error?.message || 'Failed'); return; }
+      showMsg('Vendor account created! Pending admin approval.');
+      vendorId = data.id;
+      document.getElementById('create-vendor').style.display = 'none';
+      renderVendor(data);
+    }
+
+    async function loadVendorGifts() {
+      const res = await authFetch(`/api/vendors/${vendorId}/gifts`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const gifts = data.data || data || [];
+      if (!gifts.length) return;
+      document.getElementById('vendor-gifts').innerHTML = `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Name</th><th>Price</th><th>Fragile</th><th>Status</th></tr></thead>
+          <tbody>${gifts.map(g=>`<tr><td>${g.name}</td><td>${g.price.toLocaleString()} KZT</td><td>${g.isFragile?'⚠️':'No'}</td><td><span class="badge badge-gray">${g.status}</span></td></tr>`).join('')}</tbody>
+        </table></div>`;
+    }
+
+    function openGiftModal() { document.getElementById('gift-modal').classList.add('open'); }
+    function closeGiftModal() { document.getElementById('gift-modal').classList.remove('open'); }
+
+    async function addVendorGift() {
+      const body = { name: document.getElementById('gm-name').value, description: document.getElementById('gm-desc').value, price: parseFloat(document.getElementById('gm-price').value), isFragile: document.getElementById('gm-fragile').checked, vendorId };
+      if (!body.name || !body.price) { document.getElementById('gm-err').textContent = 'Name and price required'; document.getElementById('gm-err').classList.add('show'); return; }
+      const res = await authFetch('/api/gifts', { method: 'POST', body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('gm-err').textContent = data.error?.message || 'Failed'; document.getElementById('gm-err').classList.add('show'); return; }
+      showMsg('Listing added!'); closeGiftModal(); loadVendorGifts();
+    }
+  </script>
+</body>
+</html>

@@ -18,9 +18,11 @@ const vendorRoutes = require('./routes/vendor.routes');
 const adminRoutes = require('./routes/admin.routes');
 const orderRoutes = require('./routes/order.routes');
 const deliveryRoutes = require('./routes/delivery.routes');
+const errorHandler = require('./middleware/error.middleware');
 const { swaggerUi, swaggerDocument } = require('./config/swagger');
 
 const app = express();
+app.set('trust proxy', 1);
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
@@ -45,6 +47,7 @@ app.use('/api/vendors', vendorRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/deliveries', deliveryRoutes);
+app.use(errorHandler);
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

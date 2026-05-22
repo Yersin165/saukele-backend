@@ -44,6 +44,15 @@ describe('Wedding profile creation', () => {
     expect(res.body.isActive).toBe(true);
   });
 
+  it('accepts date-only weddingDate string values', async () => {
+    const res = await request(app)
+      .post('/api/weddings')
+      .set('Authorization', `Bearer ${coupleToken}`)
+      .send({ brideName: 'Alua', groomName: 'Zhangir', weddingDate: '2027-02-02', location: 'Almaty', weddingType: 'CITY' });
+    expect(res.status).toBe(201);
+    expect(new Date(res.body.weddingDate).toISOString().startsWith('2027-02-02')).toBe(true);
+  });
+
   it('GUEST cannot create a wedding profile', async () => {
     const res = await request(app)
       .post('/api/weddings')

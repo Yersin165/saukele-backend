@@ -67,6 +67,18 @@ const login = async ({ email, password }) => {
   if (!user.isVerified) throw { status: 403, message: 'Please verify your email before logging in' };
   if (user.isBanned) throw { status: 403, message: 'Your account has been suspended' };
 
+  await prisma.refreshToken.updateMany({
+    where: {
+    userId: user.id,
+    revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+  },
+});
+
+
+
   const accessToken = generateAccessToken(user);
   const refreshToken = await generateRefreshToken(user.id);
 
@@ -82,13 +94,25 @@ const refresh = async (token) => {
   await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
 
   const user = await prisma.user.findUnique({ where: { id: stored.userId } });
-  if (!user) throw { status: 401, message: 'User not found' };
+  if (!user) {
+    throw { status: 401, message: 'Invalid or expired refresh token' };
+  }
   if (user.isBanned) throw { status: 403, message: 'Your account has been suspended' };
+
+  
+  if (!user.isVerified) {
+    throw {
+      status: 403,
+      message: 'Email verification required',
+    };
+  }
+
+
 
   const accessToken = generateAccessToken(user);
   const newRefreshToken = await generateRefreshToken(user.id);
 
-  return { accessToken, refreshToken: newRefreshToken };
+  return { user: { id: user.id, email: user.email, role: user.role, isVerified: user.isVerified, }, message: 'Registration successful. Please verify your email before logging in.', };
 };
 
 const logout = async (token) => {

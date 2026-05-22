@@ -76,4 +76,37 @@ describe('Auth', () => {
       .send({ brideName: 'A', groomName: 'B', weddingDate: '2025-06-15', location: 'Almaty', weddingType: 'CITY' });
     expect(res.status).toBe(403);
   });
+
+  it('should reject refresh when refresh token no longer exists', async () => {
+    const registerRes = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'deleted@example.com', password: 'StrongPass123!', role: 'COUPLE' });
+    const refreshToken = registerRes.body.refreshToken;
+    const user = await prisma.user.findUnique({ where: { email: 'deleted@example.com' } });
+    await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken });
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Invalid or expired refresh token');
+  });
+
+  it('should reject protected route when bearer token user is deleted', async () => {
+    const registerRes = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'deleted2@example.com', password: 'StrongPass123!', role: 'COUPLE' });
+    const token = registerRes.body.accessToken;
+    const user = await prisma.user.findUnique({ where: { email: 'deleted2@example.com' } });
+    await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+    await prisma.user.delete({ where: { email: 'deleted2@example.com' } });
+
+    const res = await request(app)
+      .get('/api/weddings/some-id')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Invalid or expired token');
+  });
 });
