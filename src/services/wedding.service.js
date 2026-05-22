@@ -1,4 +1,5 @@
 const prisma = require('../config/database');
+const { emailQueue } = require('../jobs/queue');
 
 const parseDateTime = (value) => {
   if (value === undefined || value === null) return undefined;
@@ -26,9 +27,25 @@ const create = async (coupleId, data) => {
   const existing = await prisma.weddingProfile.findUnique({ where: { coupleId } });
   if (existing) throw { status: 409, message: 'Wedding profile already exists' };
 
+  const couple = await prisma.user.findUnique({ where: { id: coupleId }, select: { email: true } });
+
   const wedding = await prisma.weddingProfile.create({
     data: { coupleId, ...normalizeWeddingData(data) }
   });
+
+  if (couple?.email) {
+    await emailQueue.add('registry-invitation', {
+      type: 'REGISTRY_INVITATION',
+      payload: {
+        email: couple.email,
+        brideName: wedding.brideName,
+        groomName: wedding.groomName,
+        inviteCode: wedding.inviteCode,
+        appUrl: process.env.APP_URL
+      }
+    });
+  }
+
   return wedding;
 };
 

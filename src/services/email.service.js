@@ -67,10 +67,41 @@ const sendVendorStatusEmail = async (email, shopName, status) => {
   await resend.emails.send({ from: FROM, to: email, subject, html: `<h2>${subject}</h2><p>${body}</p>` });
 };
 
+const sendRegistryInvitationEmail = async (email, brideName, groomName, inviteCode, appUrl) => {
+  const link = `${appUrl}/pages/registry.html?invite=${inviteCode}`;
+  await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `You're invited to ${brideName} & ${groomName}'s wedding registry!`,
+    html: `
+      <h2>Wedding Registry Invitation</h2>
+      <p>You have been invited to view and contribute to the wedding registry of <strong>${brideName}</strong> and <strong>${groomName}</strong>.</p>
+      <a href="${link}" style="background:#6366f1;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">View Registry</a>
+      <p>Use invite code: <strong>${inviteCode}</strong></p>
+    `
+  });
+};
+
+const sendDeliveryConfirmedEmail = async (email, giftName) => {
+  await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `🎁 "${giftName}" has been delivered!`,
+    html: `
+      <h2>Gift Delivered!</h2>
+      <p>Great news! Your gift <strong>${giftName}</strong> has been successfully delivered to the couple.</p>
+    `
+  });
+};
+
+
+
 module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendContributionConfirmedEmail,
   sendGiftFundedEmail,
-  sendVendorStatusEmail
+  sendVendorStatusEmail,
+  sendRegistryInvitationEmail,
+  sendDeliveryConfirmedEmail
 };

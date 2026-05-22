@@ -22,6 +22,18 @@ const emailWorker = new Worker('emails', async (job) => {
     case 'VENDOR_STATUS':
       await emailService.sendVendorStatusEmail(payload.email, payload.shopName, payload.status);
       break;
+    case 'REGISTRY_INVITATION':
+      await emailService.sendRegistryInvitationEmail(
+        payload.email,
+        payload.brideName,
+        payload.groomName,
+        payload.inviteCode,
+        payload.appUrl
+      );
+      break;
+    case 'DELIVERY_CONFIRMED':
+      await emailService.sendDeliveryConfirmedEmail(payload.email, payload.giftName);
+      break;
     default:
       throw new Error(`Unknown email job type: ${type}`);
   }

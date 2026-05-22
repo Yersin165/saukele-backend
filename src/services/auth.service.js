@@ -107,13 +107,11 @@ const refresh = async (token) => {
     };
   }
 
-
-
   const accessToken = generateAccessToken(user);
   const newRefreshToken = await generateRefreshToken(user.id);
 
-  return { user: { id: user.id, email: user.email, role: user.role, isVerified: user.isVerified, }, message: 'Registration successful. Please verify your email before logging in.', };
-};
+  return { user: { id: user.id, email: user.email, role: user.role, isVerified: user.isVerified }, accessToken, refreshToken: newRefreshToken };
+}
 
 const logout = async (token) => {
   const stored = await prisma.refreshToken.findUnique({ where: { token } });

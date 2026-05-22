@@ -16,7 +16,7 @@ const list = async (req, res) => {
       weddingProfileId = await giftService.getVendorProductsWeddingProfileId();
     }
     if (!weddingProfileId) return res.status(400).json({ message: 'weddingProfileId is required' });
-    const result = await giftService.list({ weddingProfileId, status, cursor, limit: parseInt(limit) || 20 });
+    const result = await giftService.list({ weddingProfileId, status, cursor, limit: parseInt(limit) || 20, user: req.user });
     res.status(200).json(result);
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message || 'Internal server error' });

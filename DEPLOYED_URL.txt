@@ -1,1 +1,1 @@
-https://YOUR-APP-URL-HERE.deployrocks.com
+https://saukele-backend-production.up.railway.app/

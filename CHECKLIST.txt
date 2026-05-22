@@ -1,4 +1,4 @@
-[ ] Application is LIVE on dashboard.deployrocks.com (or any other free cloud platform) with working public URL
+[ ] Application is LIVE on railway.com (or any other free cloud platform) with working public URL
 [ ] docker compose up boots entire stack (backend + frontend + postgres + redis)
 [ ] jest runs and passes with full test suite
 [ ] Swagger UI / API docs is accessible on the deployed URL and covers ALL endpoints

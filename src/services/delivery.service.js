@@ -1,4 +1,5 @@
 const prisma = require('../config/database');
+const { emailQueue } = require('../jobs/queue');
 
 const create = async (data) => {
   const order = await prisma.order.findUnique({ where: { id: data.orderId } });
@@ -56,8 +57,35 @@ const updateStatus = async (id, status) => {
     data: {
       status,
       ...(status === 'DELIVERED' && { autoCompletedAt: new Date() })
+    },
+    include: {
+      giftItem: true,
+      order: {
+        include: {
+          vendor: {
+            include: { user: { select: { email: true } } }
+          }
+        }
+      }
     }
   });
+
+  if (status === 'DELIVERED') {
+    // notify the couple via the wedding profile
+    const gift = await prisma.giftItem.findUnique({
+      where: { id: updated.giftItemId },
+      include: { weddingProfile: { include: { couple: { select: { email: true } } } } }
+    });
+    if (gift?.weddingProfile?.couple?.email) {
+      await emailQueue.add('delivery-confirmed', {
+        type: 'DELIVERY_CONFIRMED',
+        payload: {
+          email: gift.weddingProfile.couple.email,
+          giftName: gift.name
+        }
+      });
+    }
+  }
 
   return updated;
 };
