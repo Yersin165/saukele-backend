@@ -1,3 +1,5 @@
+const API_BASE_URL = 'https://saukele-backend-production.up.railway.app';
+
 const ROLE_PAGES = {
   COUPLE: ['dashboard', 'registry', 'family', 'orders'],
   GUEST: ['contribute'],
@@ -76,7 +78,7 @@ function buildNav(containerId, activePage) {
 function logout() {
   const token = localStorage.getItem('refreshToken');
   if (token) {
-    fetch('/api/auth/logout', {
+    fetch(API_BASE_URL + '/api/auth/logout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: token })
@@ -87,11 +89,12 @@ function logout() {
 }
 
 async function authFetch(url, opts = {}) {
+  if (url.startsWith('/api/')) url = API_BASE_URL + url;
   const token = localStorage.getItem('accessToken');
   opts.headers = { ...opts.headers, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
   let res = await fetch(url, opts);
   if (res.status === 401) {
-    const rr = await fetch('/api/auth/refresh', {
+    const rr = await fetch(API_BASE_URL + '/api/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: localStorage.getItem('refreshToken') })
